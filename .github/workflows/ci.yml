@@ -24,4 +24,25 @@ jobs:
 
       # The tests start SQL Server in Docker with Testcontainers; GitHub's Ubuntu runners have Docker.
       - name: Test
-        run: dotnet test EfCoreVsDapper.slnx --no-build --configuration Release --logger "console;verbosity=normal"
+        run: >
+          dotnet test EfCoreVsDapper.slnx --no-build --configuration Release
+          --logger "console;verbosity=normal"
+          --logger "trx;LogFileName=results.trx"
+          --results-directory TestResults
+
+      - name: Summarise test results
+        if: always()
+        shell: python
+        run: |
+          import glob, os, xml.etree.ElementTree as ET
+          ns = {"t": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
+          rows, totals = [], {"Passed": 0, "Failed": 0, "NotExecuted": 0}
+          for path in glob.glob("TestResults/**/*.trx", recursive=True):
+              for r in ET.parse(path).getroot().iterfind(".//t:UnitTestResult", ns):
+                  outcome = r.get("outcome")
+                  totals[outcome] = totals.get(outcome, 0) + 1
+                  rows.append(f"| {r.get('testName')} | {outcome} |")
+          line = f"{totals['Passed']} passed, {totals['Failed']} failed, {totals['NotExecuted']} skipped"
+          print(f"::notice title=Test results::{line}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
+              f.write(f"## Test results\n\n{line}\n\n| Test | Outcome |\n|---|---|\n" + "\n".join(sorted(rows)) + "\n")
