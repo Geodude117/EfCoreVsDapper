@@ -1,0 +1,72 @@
+# EF Core vs Dapper
+
+The same REST API, backed by the same SQL Server tables, implemented twice: once with **Entity Framework Core** and once with **Dapper**. It's a side-by-side reference for how each one stores and retrieves data, and when you might pick one over the other.
+
+```
+GET /ef/customers        ← EF Core: LINQ, change tracking, generated SQL
+GET /dapper/customers    ← Dapper: hand-written SQL mapped to C# records
+```
+
+Both return identical JSON, and one test suite runs against both to prove it.
+
+## What's covered
+
+| Operation | EF Core | Dapper |
+|---|---|---|
+| List with a computed column | LINQ projection, `Orders.Count()` becomes a subquery | `SELECT` with a correlated `COUNT(*)` |
+| Parent with children | Nested collection projection in one query | `QueryMultiple`: two result sets, one round trip |
+| Create parent and children atomically | Add the object graph; `SaveChanges` wraps it in a transaction | Explicit `BEGIN TRANSACTION`, `OUTPUT INSERTED.Id`, commit |
+| Insert only if the parent exists | `AnyAsync`, then `Add` and `SaveChanges` | One `INSERT … SELECT … WHERE EXISTS` |
+| Update without loading | `ExecuteUpdateAsync` | `UPDATE … WHERE Id = @Id` |
+| Delete with cascade | `ExecuteDeleteAsync` + `ON DELETE CASCADE` | `DELETE` + `ON DELETE CASCADE` |
+| Aggregate report | `GroupBy`-style projection with `Sum` and `Count` | `GROUP BY` with `SUM` and `COUNT` |
+| Unique key violation | `DbUpdateException` → `DuplicateEmailException` | `SqlException` → `DuplicateEmailException` |
+
+## Project layout
+
+```
+src/EfCoreVsDapper.Api/
+  Domain/                 Customer and Order entities (used by EF Core)
+  Contracts/              Request and response records (shared by both)
+  Data/
+    ICustomerStore.cs     The interface both implementations satisfy
+    EfCore/               AppDbContext (also defines the schema) and EfCustomerStore
+    DapperSql/            SqlConnectionFactory and DapperCustomerStore
+  Endpoints/              One generic set of endpoints, mapped once per store
+  EfCoreVsDapper.http     Requests to try against either store
+tests/EfCoreVsDapper.Tests/
+  CustomerStoreTests.cs   Every test runs against both stores on a real SQL Server
+```
+
+## Running it
+
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and SQL Server.
+
+**With LocalDB (Windows, installed with Visual Studio):** the default connection string already points at it.
+
+```bash
+dotnet run --project src/EfCoreVsDapper.Api
+```
+
+**With Docker (any OS):**
+
+```bash
+docker compose up -d
+ConnectionStrings__Default="Server=localhost,1433;Database=EfCoreVsDapper;User Id=sa;Password=LocalDev_Passw0rd!;TrustServerCertificate=True" \
+  dotnet run --project src/EfCoreVsDapper.Api
+```
+
+The database is created and seeded on first run. Open `src/EfCoreVsDapper.Api/EfCoreVsDapper.http` and switch `@store` between `ef` and `dapper` to compare. In Development, EF Core logs every SQL statement it generates, so you can see what your LINQ turns into.
+
+## Running the tests
+
+```bash
+dotnet test
+```
+
+The tests use [Testcontainers](https://dotnet.testcontainers.org/) to start a throwaway SQL Server in Docker, so Docker must be running. Every behaviour test is a `[Theory]` that runs once for `ef` and once for `dapper`, plus one test that checks both return identical results for the same data. GitHub Actions runs the same suite on every push.
+
+## Notes
+
+- The schema comes from the EF Core model via `EnsureCreated`, so both stores always share the same tables. A real application would use EF Core migrations so the schema can evolve.
+- Dapper queries always pass parameters as objects (`new { Id = id }`), never by building SQL strings, so they're safe from SQL injection.

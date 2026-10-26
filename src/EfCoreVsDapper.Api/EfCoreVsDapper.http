@@ -1,0 +1,50 @@
+# Run the API (dotnet run --project src/EfCoreVsDapper.Api), then send these from
+# Visual Studio, Rider or VS Code's REST Client extension.
+# Swap @store between "ef" and "dapper": the responses should be identical.
+
+@host = http://localhost:5080
+@store = ef
+
+### List customers with their order counts
+GET {{host}}/{{store}}/customers
+
+### One customer with all their orders
+GET {{host}}/{{store}}/customers/1
+
+### Top spenders
+GET {{host}}/{{store}}/customers/top?count=3
+
+### Create a customer with two orders (saved in one transaction)
+POST {{host}}/{{store}}/customers
+Content-Type: application/json
+
+{
+  "name": "Margaret Hamilton",
+  "email": "margaret@example.com",
+  "initialOrders": [99.99, 15.50]
+}
+
+### Same email again: 409 Conflict, and no orders are left behind
+POST {{host}}/{{store}}/customers
+Content-Type: application/json
+
+{
+  "name": "Someone Else",
+  "email": "margaret@example.com",
+  "initialOrders": [10.00]
+}
+
+### Add an order
+POST {{host}}/{{store}}/customers/1/orders
+Content-Type: application/json
+
+{ "total": 49.95 }
+
+### Change an email
+PUT {{host}}/{{store}}/customers/1/email
+Content-Type: application/json
+
+{ "email": "ada.lovelace@example.com" }
+
+### Delete a customer (their orders go too)
+DELETE {{host}}/{{store}}/customers/4

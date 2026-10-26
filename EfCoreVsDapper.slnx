@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EfCoreVsDapper.Api/EfCoreVsDapper.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EfCoreVsDapper.Tests/EfCoreVsDapper.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,13 @@
+# Optional: run SQL Server in Docker instead of LocalDB (for macOS, Linux, or no LocalDB).
+#   docker compose up -d
+# then run the API with this connection string:
+#   ConnectionStrings__Default="Server=localhost,1433;Database=EfCoreVsDapper;User Id=sa;Password=LocalDev_Passw0rd!;TrustServerCertificate=True"
+# The password is for a throwaway local container only.
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "LocalDev_Passw0rd!"
+    ports:
+      - "1433:1433"
